@@ -45,7 +45,7 @@ func (self *Crawler) Run(to string) {
 	self.startedAt = &now
 	self.endedAt = nil
 	defer self.done()
-	self.visit(to, 0)
+	self.visit(to, to, 0)
 }
 
 func (self *Crawler) done() {
@@ -53,7 +53,7 @@ func (self *Crawler) done() {
 	self.endedAt = &now
 }
 
-func (self *Crawler) visit(to string, depth int64) {
+func (self *Crawler) visit(from string, to string, depth int64) {
 	url, err := url.Parse(to)
 
 	if err != nil {
@@ -66,11 +66,11 @@ func (self *Crawler) visit(to string, depth int64) {
 		url.Path,
 	)
 
-	if v, _ := visited[path]; v {
+	if visited.Has(path) {
 		return
 	}
 
-	visited[path] = true
+	visited.Set(path, true)
 	startedAt := time.Now()
 	res, err := self.get(to)
 
@@ -95,6 +95,7 @@ func (self *Crawler) visit(to string, depth int64) {
 	}
 
 	self.amqp.Publish("pages", "upsert", map[string]any{
+		"from_url":   from,
 		"title":      title,
 		"url":        to,
 		"address":    res.Header.Get("X-RemoteAddress"),
@@ -104,7 +105,7 @@ func (self *Crawler) visit(to string, depth int64) {
 	})
 
 	for _, url := range urls {
-		defer self.visit(url, depth+1)
+		defer self.visit(to, url, depth+1)
 	}
 }
 
@@ -121,6 +122,7 @@ func (self *Crawler) parseTitle(html string) string {
 func (self *Crawler) parseUrls(url *url.URL, html string) ([]string, error) {
 	urls := []string{}
 	matches := self.anchor.FindAllStringSubmatch(html, -1)
+	visited := map[string]bool{}
 
 	for _, match := range matches {
 		matchUrl, err := url.Parse(strings.TrimSpace(match[1]))
@@ -130,10 +132,17 @@ func (self *Crawler) parseUrls(url *url.URL, html string) ([]string, error) {
 			continue
 		}
 
+		var parsed string
+
 		if matchUrl.IsAbs() {
-			urls = append(urls, matchUrl.String())
+			parsed = matchUrl.String()
 		} else {
-			urls = append(urls, url.Scheme+"://"+url.Host+matchUrl.String())
+			parsed = url.Scheme + "://" + url.Host + matchUrl.String()
+		}
+
+		if _, ok := visited[parsed]; !ok {
+			urls = append(urls, parsed)
+			visited[parsed] = true
 		}
 	}
 

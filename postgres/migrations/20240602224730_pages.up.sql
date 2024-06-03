@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS pages (
     id          	UUID         	PRIMARY KEY,
-	domain_id		UUID			NOT NULL REFERENCES domains(id),
+	domain_id		UUID			NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
 	title			TEXT,
 	url				TEXT			NOT NULL,
 	address			TEXT			NOT NULL,

@@ -1,2 +1,2 @@
-# sss
- Stupid Simple Search
+# Stupid Simple Search
+
