@@ -79,6 +79,13 @@ func (self Html) Urls() []string {
 			parsed = self.url.Scheme + "://" + self.url.Host + matchUrl.String()
 		}
 
+		parsed, err = url.PathUnescape(parsed)
+
+		if err != nil {
+			self.log.Println(err)
+			continue
+		}
+
 		if _, ok := visited[parsed]; !ok {
 			urls = append(urls, parsed)
 			visited[parsed] = true

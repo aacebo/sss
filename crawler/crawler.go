@@ -56,11 +56,13 @@ func (self *Crawler) visit(from string, to string, depth int64) {
 	url, err := url.Parse(to)
 
 	if err != nil {
-		panic(err)
+		log.Println(err)
+		return
 	}
 
 	path := fmt.Sprintf(
-		"%s%s",
+		"%s => %s%s",
+		from,
 		url.Hostname(),
 		url.Path,
 	)
@@ -89,7 +91,7 @@ func (self *Crawler) visit(from string, to string, depth int64) {
 	})
 
 	for _, url := range urls {
-		defer self.visit(to, url, depth+1)
+		self.visit(to, url, depth+1)
 	}
 }
 
