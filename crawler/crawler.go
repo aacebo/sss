@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"os"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/aacebo/sss/amqp"
@@ -72,34 +71,19 @@ func (self *Crawler) visit(from string, to string, depth int64) {
 
 	visited.Set(path, true)
 	startedAt := time.Now()
-	res, err := self.get(to)
+	page, err := self.get(url)
 
-	if err != nil || res.StatusCode != http.StatusOK {
+	if err != nil || page.Status() != http.StatusOK {
 		return
 	}
 
-	defer res.Body.Close()
-	content, err := io.ReadAll(res.Body)
-
-	if err != nil {
-		self.log.Println(err)
-		return
-	}
-
-	raw := html.UnescapeString(string(content))
-	title := self.parseTitle(raw)
-	urls, err := self.parseUrls(url, raw)
-
-	if err != nil {
-		panic(err)
-	}
-
+	urls := page.Urls()
 	self.amqp.Publish("pages", "upsert", map[string]any{
 		"from_url":   from,
-		"title":      title,
+		"title":      page.Title(),
 		"url":        to,
-		"address":    res.Header.Get("X-RemoteAddress"),
-		"size":       len(content),
+		"address":    page.Address(),
+		"size":       page.Len(),
 		"elapse_ms":  time.Now().UnixMilli() - startedAt.UnixMilli(),
 		"link_count": len(urls),
 	})
@@ -109,58 +93,17 @@ func (self *Crawler) visit(from string, to string, depth int64) {
 	}
 }
 
-func (self *Crawler) parseTitle(html string) string {
-	matches := self.title.FindAllStringSubmatch(html, -1)
-
-	if len(matches) == 0 {
-		return ""
-	}
-
-	return matches[len(matches)-1][1]
-}
-
-func (self *Crawler) parseUrls(url *url.URL, html string) ([]string, error) {
-	urls := []string{}
-	matches := self.anchor.FindAllStringSubmatch(html, -1)
-	visited := map[string]bool{}
-
-	for _, match := range matches {
-		matchUrl, err := url.Parse(strings.TrimSpace(match[1]))
-
-		if err != nil {
-			self.log.Println(err)
-			continue
-		}
-
-		var parsed string
-
-		if matchUrl.IsAbs() {
-			parsed = matchUrl.String()
-		} else {
-			parsed = url.Scheme + "://" + url.Host + matchUrl.String()
-		}
-
-		if _, ok := visited[parsed]; !ok {
-			urls = append(urls, parsed)
-			visited[parsed] = true
-		}
-	}
-
-	return urls, nil
-}
-
-func (self *Crawler) get(url string) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+func (self *Crawler) get(url *url.URL) (*Html, error) {
+	req, err := http.NewRequest(http.MethodGet, url.String(), nil)
 
 	if err != nil {
 		return nil, err
 	}
 
-	address := ""
-
+	page := NewHtml(url)
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{
 		GotConn: func(info httptrace.GotConnInfo) {
-			address = info.Conn.RemoteAddr().String()
+			page.address = info.Conn.RemoteAddr().String()
 		},
 	}))
 
@@ -170,6 +113,14 @@ func (self *Crawler) get(url string) (*http.Response, error) {
 		return nil, err
 	}
 
-	res.Header.Set("X-RemoteAddress", address)
-	return res, nil
+	defer res.Body.Close()
+	content, err := io.ReadAll(res.Body)
+
+	if err != nil {
+		return nil, err
+	}
+
+	page.content = []byte(html.UnescapeString(string(content)))
+	page.status = res.StatusCode
+	return page, nil
 }
