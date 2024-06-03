@@ -19,19 +19,12 @@ import (
 func onPageUpsert(pg *sql.DB) func(d amqp091.Delivery) {
 	domains := repos.NewDomain(pg)
 	pages := repos.NewPage(pg)
-	links := repos.NewLink(pg)
 
 	return func(d amqp091.Delivery) {
 		data := map[string]any{}
 		dec := gob.NewDecoder(bytes.NewBuffer(d.Body))
 
 		if err := dec.Decode(&data); err != nil {
-			log.Fatal(err)
-		}
-
-		fromUrl, err := url.Parse(data["from_url"].(string))
-
-		if err != nil {
 			log.Fatal(err)
 		}
 
@@ -60,31 +53,23 @@ func onPageUpsert(pg *sql.DB) func(d amqp091.Delivery) {
 		)
 
 		if !exists {
-			domain = models.Domain{
+			domain, err = domains.Create(models.Domain{
 				ID:        uuid.NewString(),
 				Name:      domainName,
 				Extension: ext,
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
-			}
-
-			domain = domains.Create(domain)
+			})
 		} else {
-			domain = domains.Update(domain)
+			domain, err = domains.Update(domain)
 		}
 
-		fromPath := fromUrl.Hostname() + fromUrl.Path
-
-		if fromPath[:4] == "www." {
-			fromPath = fromPath[4:]
+		if err != nil {
+			d.Nack(false, true)
+			return
 		}
 
-		path := url.Hostname() + url.Path
-
-		if path[:4] == "www." {
-			path = path[4:]
-		}
-
+		path := UrlToString(url)
 		log.Println(fmt.Sprintf(
 			"%s %dms",
 			path,
@@ -100,7 +85,7 @@ func onPageUpsert(pg *sql.DB) func(d amqp091.Delivery) {
 		}
 
 		if !exists {
-			page = models.Page{
+			page, err = pages.Create(models.Page{
 				ID:        uuid.NewString(),
 				DomainID:  domain.ID,
 				Title:     title,
@@ -111,32 +96,19 @@ func onPageUpsert(pg *sql.DB) func(d amqp091.Delivery) {
 				LinkCount: data["link_count"].(int),
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
-			}
-
-			page = pages.Create(page)
+			})
 		} else {
 			page.Title = title
 			page.Address = data["address"].(string)
 			page.Size = int64(data["size"].(int))
 			page.ElapseMs = data["elapse_ms"].(int64)
 			page.LinkCount = data["link_count"].(int)
-			page = pages.Update(page)
+			page, err = pages.Update(page)
 		}
 
-		from, exists := pages.GetOne(fromPath)
-
-		if !exists {
-			log.Fatalf("from_url %s not found", fromPath)
-		}
-
-		if from.ID != page.ID {
-			if _, exists := links.GetOne(from.ID, page.ID); !exists {
-				links.Create(models.Link{
-					FromID:    from.ID,
-					ToID:      page.ID,
-					CreatedAt: time.Now(),
-				})
-			}
+		if err != nil {
+			d.Nack(false, true)
+			return
 		}
 
 		d.Ack(false)

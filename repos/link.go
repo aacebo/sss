@@ -11,7 +11,7 @@ type ILinkRepository interface {
 	GetOne(fromId string, toId string) (models.Link, bool)
 	GetByPageID(pageId string) []models.Link
 
-	Create(value models.Link) models.Link
+	Create(value models.Link) (models.Link, error)
 	DeleteByPageID(pageId string)
 }
 
@@ -92,7 +92,7 @@ func (self LinkRepository) GetByPageID(pageId string) []models.Link {
 	return arr
 }
 
-func (self LinkRepository) Create(value models.Link) models.Link {
+func (self LinkRepository) Create(value models.Link) (models.Link, error) {
 	now := time.Now()
 	value.CreatedAt = now
 	_, err := self.pg.Exec(
@@ -105,18 +105,15 @@ func (self LinkRepository) Create(value models.Link) models.Link {
 				$1,
 				$2,
 				$3
-			)
+			) ON CONFLICT (from_id, to_id)
+			DO NOTHING
 		`,
 		value.FromID,
 		value.ToID,
 		value.CreatedAt,
 	)
 
-	if err != nil {
-		panic(err)
-	}
-
-	return value
+	return value, err
 }
 
 func (self LinkRepository) DeleteByPageID(pageId string) {

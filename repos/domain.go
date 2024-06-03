@@ -11,8 +11,8 @@ type IDomainRepository interface {
 	GetByID(id string) (models.Domain, bool)
 	GetOne(name string, extension string) (models.Domain, bool)
 
-	Create(value models.Domain) models.Domain
-	Update(value models.Domain) models.Domain
+	Create(value models.Domain) (models.Domain, error)
+	Update(value models.Domain) (models.Domain, error)
 }
 
 type DomainRepository struct {
@@ -91,7 +91,7 @@ func (self DomainRepository) GetOne(name string, extension string) (models.Domai
 	return v, true
 }
 
-func (self DomainRepository) Create(value models.Domain) models.Domain {
+func (self DomainRepository) Create(value models.Domain) (models.Domain, error) {
 	now := time.Now()
 	value.CreatedAt = now
 	value.UpdatedAt = now
@@ -118,14 +118,10 @@ func (self DomainRepository) Create(value models.Domain) models.Domain {
 		value.UpdatedAt,
 	)
 
-	if err != nil {
-		panic(err)
-	}
-
-	return value
+	return value, err
 }
 
-func (self DomainRepository) Update(value models.Domain) models.Domain {
+func (self DomainRepository) Update(value models.Domain) (models.Domain, error) {
 	now := time.Now()
 	value.UpdatedAt = now
 	_, err := self.pg.Exec(
@@ -138,9 +134,5 @@ func (self DomainRepository) Update(value models.Domain) models.Domain {
 		value.UpdatedAt,
 	)
 
-	if err != nil {
-		panic(err)
-	}
-
-	return value
+	return value, err
 }

@@ -44,7 +44,7 @@ func (self *Crawler) Run(to string) {
 	self.startedAt = &now
 	self.endedAt = nil
 	defer self.done()
-	self.visit(to, to, 0)
+	self.visit(to, 0)
 }
 
 func (self *Crawler) done() {
@@ -52,7 +52,7 @@ func (self *Crawler) done() {
 	self.endedAt = &now
 }
 
-func (self *Crawler) visit(from string, to string, depth int64) {
+func (self *Crawler) visit(to string, depth int64) {
 	url, err := url.Parse(to)
 
 	if err != nil {
@@ -61,8 +61,7 @@ func (self *Crawler) visit(from string, to string, depth int64) {
 	}
 
 	path := fmt.Sprintf(
-		"%s => %s%s",
-		from,
+		"%s%s",
 		url.Hostname(),
 		url.Path,
 	)
@@ -81,7 +80,6 @@ func (self *Crawler) visit(from string, to string, depth int64) {
 
 	urls := page.Urls()
 	self.amqp.Publish("pages", "upsert", map[string]any{
-		"from_url":   from,
 		"title":      page.Title(),
 		"url":        to,
 		"address":    page.Address(),
@@ -91,7 +89,13 @@ func (self *Crawler) visit(from string, to string, depth int64) {
 	})
 
 	for _, url := range urls {
-		self.visit(to, url, depth+1)
+		defer func() {
+			defer self.visit(url, depth+1)
+			self.amqp.Publish("links", "upsert", map[string]string{
+				"from_url": to,
+				"to_url":   url,
+			})
+		}()
 	}
 }
 

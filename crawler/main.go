@@ -22,6 +22,9 @@ func main() {
 		"https://en.wikipedia.org/",
 	}
 
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
 	go func() {
 		wg := sync.WaitGroup{}
 
@@ -46,5 +49,15 @@ func main() {
 		wg.Wait()
 	}()
 
-	queue.Consume("pages", "upsert", onPageUpsert(pg))
+	go func() {
+		defer wg.Done()
+		queue.Consume("pages", "upsert", onPageUpsert(pg))
+	}()
+
+	go func() {
+		defer wg.Done()
+		queue.Consume("links", "upsert", onLinkUpsert(pg))
+	}()
+
+	wg.Wait()
 }

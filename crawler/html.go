@@ -55,7 +55,7 @@ func (self Html) Title() string {
 		return ""
 	}
 
-	return matches[len(matches)-1][1]
+	return matches[0][1]
 }
 
 func (self Html) Urls() []string {
@@ -82,6 +82,11 @@ func (self Html) Urls() []string {
 		parsed, err = url.PathUnescape(parsed)
 
 		if err != nil {
+			self.log.Println(err)
+			continue
+		}
+
+		if _, err := url.Parse(parsed); err != nil {
 			self.log.Println(err)
 			continue
 		}

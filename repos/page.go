@@ -11,8 +11,8 @@ type IPageRepository interface {
 	GetByID(id string) (models.Page, bool)
 	GetOne(url string) (models.Page, bool)
 
-	Create(value models.Page) models.Page
-	Update(value models.Page) models.Page
+	Create(value models.Page) (models.Page, error)
+	Update(value models.Page) (models.Page, error)
 }
 
 type PageRepository struct {
@@ -109,7 +109,7 @@ func (self PageRepository) GetOne(url string) (models.Page, bool) {
 	return v, true
 }
 
-func (self PageRepository) Create(value models.Page) models.Page {
+func (self PageRepository) Create(value models.Page) (models.Page, error) {
 	now := time.Now()
 	value.CreatedAt = now
 	value.UpdatedAt = now
@@ -151,14 +151,10 @@ func (self PageRepository) Create(value models.Page) models.Page {
 		value.UpdatedAt,
 	)
 
-	if err != nil {
-		panic(err)
-	}
-
-	return value
+	return value, err
 }
 
-func (self PageRepository) Update(value models.Page) models.Page {
+func (self PageRepository) Update(value models.Page) (models.Page, error) {
 	now := time.Now()
 	value.UpdatedAt = now
 	_, err := self.pg.Exec(
@@ -181,9 +177,5 @@ func (self PageRepository) Update(value models.Page) models.Page {
 		value.UpdatedAt,
 	)
 
-	if err != nil {
-		panic(err)
-	}
-
-	return value
+	return value, err
 }
